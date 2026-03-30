@@ -12,6 +12,9 @@ A lightweight floating desktop todo app for macOS & Windows, built with Electron
 - **Urgent tag** — mark tasks as urgent with a red badge
 - **Deadline support** — set due dates; overdue tasks show in yellow, today's in blue
 - **Auto-sort** — urgent and due-today tasks bubble to the top automatically
+- **Inline editing** — click any task text to edit content, urgency, or deadline in place
+- **History archive** — completed tasks are archived and browsable by month
+- **Persistent position** — window position and size are remembered across restarts
 - **Glassmorphism UI** — frosted glass look that blends with your desktop
 
 ## Download
@@ -37,11 +40,14 @@ npm start
 ## Build
 
 ```bash
-# macOS
+# macOS (Apple Silicon + Intel universal)
 npm run build:mac
 
-# Windows
+# Windows x64
 npm run build:win
+
+# Both platforms
+npm run build:all
 ```
 
 Output files will be in `dist/mac/` and `dist/win/`.
@@ -54,10 +60,12 @@ Output files will be in `dist/mac/` and `dist/win/`.
 | Mark urgent | Click 🚨 before adding |
 | Set deadline | Click 📅 to pick a date |
 | Complete task | Click the circle on the left |
+| Edit task | Click the task text to edit inline |
 | Delete task | Hover and click **✕** |
 | Minimize to bubble | Click **●** in the top bar |
 | Pin on top | Click **▲** in the top bar |
 | Clear completed | Click **清除完成** at the bottom |
+| View history | Click **历史** at the bottom |
 
 ---
 
@@ -75,6 +83,9 @@ Output files will be in `dist/mac/` and `dist/win/`.
 - **紧急标签** — 标记紧急任务，显示红色"急"标签
 - **截止日期** — 设置 DDL，逾期显示黄色，今日截止显示蓝色
 - **自动排序** — 紧急和今日截止的任务自动置顶
+- **行内编辑** — 点击任务文字即可就地修改内容、紧急状态和截止日期
+- **历史归档** — 已完成任务自动存档，可按月浏览历史记录
+- **记住位置** — 窗口位置和尺寸在重启后自动恢复
 - **磨砂玻璃 UI** — 半透明毛玻璃风格，与桌面融为一体
 
 ## 下载安装
@@ -100,11 +111,14 @@ npm start
 ## 打包构建
 
 ```bash
-# macOS
+# macOS（Apple Silicon + Intel 通用）
 npm run build:mac
 
-# Windows
+# Windows x64
 npm run build:win
+
+# 同时打包两个平台
+npm run build:all
 ```
 
 输出文件分别在 `dist/mac/` 和 `dist/win/` 目录下。
@@ -117,7 +131,9 @@ npm run build:win
 | 标记紧急 | 添加前点击 🚨 按钮 |
 | 设置截止日期 | 点击 📅 按钮选择日期 |
 | 完成任务 | 点击左侧圆圈 |
+| 编辑任务 | 点击任务文字，行内编辑 |
 | 删除任务 | 鼠标悬停后点击 **✕** |
 | 缩成悬浮球 | 点击顶栏 **●** 按钮 |
 | 置顶窗口 | 点击顶栏 **▲** 按钮 |
-| 清除已完成 | 点击底部**清除完成** |
+| 清除已完成 | 点击底部 **清除完成** |
+| 查看历史 | 点击底部 **历史** |

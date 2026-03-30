@@ -6,7 +6,8 @@ let mainWindow
 let bubbleWindow
 let tray
 
-const dataPath = path.join(app.getPath('userData'), 'todos.json')
+const dataPath    = path.join(app.getPath('userData'), 'todos.json')
+const archivePath = path.join(app.getPath('userData'), 'archive.json')
 
 function loadTodos() {
   try {
@@ -99,6 +100,19 @@ app.on('activate', () => {
 // IPC 通信：读写 todos
 ipcMain.handle('load-todos', () => loadTodos())
 ipcMain.handle('save-todos', (_, todos) => saveTodos(todos))
+
+// IPC 通信：读写 archive
+ipcMain.handle('load-archive', () => {
+  try {
+    if (fs.existsSync(archivePath)) {
+      return JSON.parse(fs.readFileSync(archivePath, 'utf8'))
+    }
+  } catch (e) {}
+  return []
+})
+ipcMain.handle('save-archive', (_, archive) => {
+  fs.writeFileSync(archivePath, JSON.stringify(archive), 'utf8')
+})
 
 // IPC 通信：窗口控制
 ipcMain.on('window-minimize', () => mainWindow && mainWindow.minimize())

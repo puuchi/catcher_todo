@@ -6,5 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   minimize: () => ipcRenderer.send('window-minimize'),
   close: () => ipcRenderer.send('window-close'),
   setPin: (pinned) => ipcRenderer.send('window-pin', pinned),
-  minimizeToBubble: () => ipcRenderer.send('minimize-to-bubble')
+  minimizeToBubble: () => ipcRenderer.send('minimize-to-bubble'),
+  loadArchive: () => ipcRenderer.invoke('load-archive'),
+  saveArchive: (archive) => ipcRenderer.invoke('save-archive', archive)
 })
