@@ -19,6 +19,16 @@
     </div>
   </div>
 
+  <nav class="module-tabs" aria-label="功能导航">
+    <button data-page="todos" class="selected" aria-selected="true">待办</button>
+    <button data-page="current" aria-selected="false">正在做 <span id="navActivityDot"></span></button>
+    <button data-page="timeline" aria-selected="false">时间轴</button>
+  </nav>
+  <div id="activityMessage" class="activity-message" role="status" hidden>
+    <span id="activityMessageText"></span>
+    <button id="dismissActivityMessage" type="button" aria-label="关闭提示" title="关闭提示" hidden>✕</button>
+  </div>
+  <section id="page-todos" class="module-page">
   <div class="input-area">
     <input type="text" id="todoInput" placeholder="添加新任务… (Enter)" maxlength="80" />
     <button class="icon-btn" id="optUrgent" title="标记紧急">🚨</button>
@@ -38,6 +48,114 @@
   </div>
 
 
+  </section>
+  <section id="page-current" class="module-page activity-page" hidden>
+    <div class="current-card">
+      <div class="card-eyebrow"><span id="currentStatus">未开始</span><span id="currentStarted"></span></div>
+      <h1 id="currentName">未开始活动</h1>
+      <div class="current-timer-row">
+        <div id="currentTimer" class="current-timer">00:00:00</div>
+        <div class="activity-actions">
+          <button id="pauseActivity" hidden>暂停</button>
+          <button id="endActivity" hidden>结束</button>
+        </div>
+      </div>
+      <p id="currentHint" class="muted" hidden></p>
+      <form id="progressForm" class="progress-form" hidden>
+        <input id="currentProgress" aria-label="本次进展" placeholder="✎ 本次进展（可选）" maxlength="2000" autocomplete="off" />
+        <button type="submit" title="保存本次进展">保存</button>
+      </form>
+    </div>
+    <section id="backgroundActivities" class="background-activities" hidden>
+      <button id="backgroundToggle" class="background-toggle" aria-expanded="true" aria-controls="pausedActivityList"><span>后台事项 <span id="backgroundCount">0</span></span><span aria-hidden="true">⌄</span></button>
+      <div id="pausedActivityList" class="paused-activity-list"></div>
+    </section>
+    <form id="startActivityForm" class="start-activity-form">
+      <div class="start-activity-heading"><label for="activityName">开始新活动</label><button id="openToday" class="quiet-button" type="button">今日时间轴 →</button></div>
+      <div class="activity-input-row">
+        <input id="activityName" placeholder="你现在准备做什么？" maxlength="200" autocomplete="off" required />
+        <button class="primary" type="submit">开始</button>
+      </div>
+    </form>
+  </section>
+  <section id="page-timeline" class="module-page" hidden>
+    <div id="timelineOverview" class="timeline-overview">
+    <div class="timeline-toolbar">
+      <button id="previousDay" aria-label="前一天">‹</button>
+      <input id="timelineDate" type="date" aria-label="时间轴日期" />
+      <button id="nextDay" aria-label="后一天">›</button>
+      <button id="todayButton">今天</button>
+    </div>
+    <div class="timeline-summary"><span id="dayTotal"></span><button id="addActivity">＋ 补录</button></div>
+    <div class="heat-legend" aria-label="有效时长越长，颜色越深">
+      <span><i data-heat="1"></i>＜15 分</span><span><i data-heat="2"></i>15–30</span><span><i data-heat="3"></i>30–60</span><span><i data-heat="4"></i>≥60 分</span>
+    </div>
+    <div id="timelineList" class="timeline-list"></div>
+    <div id="focusSummary" class="focus-summary" hidden><div class="focus-summary-heading"><span class="focus-color-dot" aria-hidden="true"></span><span id="focusSummaryText"></span><button id="clearFocus" aria-label="取消聚焦" title="取消聚焦">×</button></div><div id="focusSummaryStats"></div></div>
+    </div>
+    <div id="matterDetails" class="matter-details" hidden>
+      <header class="details-heading"><button id="backToTimeline" aria-label="返回时间轴">‹</button><strong>详情</strong><button id="editMatter" aria-label="编辑事项名称与状态" title="编辑事项名称与状态">✎</button><button id="deleteMatter" class="matter-trash" aria-label="将整个事项移入回收站" title="将整个事项移入回收站"></button></header>
+      <div id="matterDetailBody" class="matter-detail-body">
+        <div class="matter-title"><h2 id="matterName"></h2><span id="matterStatus" class="timeline-status"></span></div>
+        <div class="matter-stats"><div><strong id="matterTotal"></strong><span>累计投入</span></div><div><strong id="matterVisits"></strong><span>投入</span></div></div>
+        <div id="matterSessions"></div>
+      </div>
+    </div>
+  </section>
+  <section id="page-trash" class="module-page recycle-page" hidden>
+    <header class="recycle-heading"><button id="trashBack" aria-label="返回原页面" title="返回">‹</button><strong>回收站</strong><select id="trashFilter" aria-label="回收站类型"><option value="all">全部</option><option value="todo">待办</option><option value="matter">事项</option><option value="session">单次记录</option></select></header>
+    <div id="trashMessage" class="editor-error recycle-message" role="status" hidden></div>
+    <div id="trashList" class="recycle-list"></div>
+  </section>
+  <section id="appearancePanel" class="appearance-panel" hidden>
+    <label for="backgroundTransparency">背景透明度 <output id="transparencyValue">45%</output></label>
+    <input id="backgroundTransparency" type="range" min="0" max="100" step="1" value="45" disabled />
+    <div class="appearance-caption"><span>不透明</span><span id="appearanceStatus" role="status"></span><span>全透明</span></div>
+  </section>
+  <footer class="app-tools">
+    <div class="app-tools-left"><button id="btnAppearance" title="背景透明度" aria-label="背景透明度设置" aria-expanded="false" aria-controls="appearancePanel">外观</button><button id="todoTrashBtn" class="trash-tool" aria-label="打开回收站" title="回收站" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg></button></div>
+    <button id="quitApp">退出 Floatodo</button>
+  </footer>
+  <div id="timelineMenu" class="timeline-menu" role="menu" aria-label="活动操作" hidden>
+    <button id="timelineMenuEdit" role="menuitem" tabindex="-1">↗ 详情</button>
+    <button id="timelineMenuDelete" role="menuitem" tabindex="-1" aria-label="删除本次记录" title="删除本次记录"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg></button>
+  </div>
+  <dialog id="activityEditor" aria-labelledby="editorTitle">
+    <form id="activityEditorForm">
+      <div class="editor-heading"><strong id="editorTitle">编辑活动</strong><button id="closeEditor" type="button" aria-label="关闭编辑">✕</button></div>
+      <div id="editorBody" class="editor-body">
+        <div id="recordMatterField" class="editor-field" hidden><label for="recordActivity">事项</label><div class="record-matter-control"><select id="recordActivity"><option value="">＋ 新建事项</option></select><button id="deleteSelectedMatter" class="matter-trash" type="button" aria-label="将所选事项移入回收站" title="将所选事项移入回收站" hidden></button></div></div>
+        <label class="editor-field"><span>活动名称</span><input id="editActivityName" maxlength="200" required /></label>
+        <label id="editMatterStatusField" class="editor-field" hidden><span>状态</span><select id="editMatterStatus"><option value="running">进行中</option><option value="paused">已暂停</option><option value="completed">已完成</option></select></label>
+        <label id="editProgressField" class="editor-field" hidden><span>本次进展</span><input id="editSessionProgress" maxlength="2000" placeholder="可选" /></label>
+        <label id="recordDateField" class="editor-field"><span>日期</span><input id="editActivityDate" type="date" required /></label>
+        <div class="editor-field"><label for="editActivityStart">开始</label><div class="editor-time-control"><input id="editActivityStart" type="text" step="1" placeholder="HH:mm:ss" required /><span class="session-time-actions"><button id="chooseSessionStart" type="button" aria-label="选择开始时间" title="选择开始时间" aria-expanded="false" aria-controls="compactTimePicker">◷</button><button id="sessionStartNow" type="button">现在</button></span></div></div>
+        <div class="editor-field"><label for="editActivityEnd">结束</label><div class="editor-time-control"><input id="editActivityEnd" type="text" step="1" placeholder="HH:mm:ss" /><span class="session-time-actions"><button id="endDayToggle" type="button" title="切换结束日期">当天</button><button id="chooseSessionEnd" type="button" aria-label="选择结束时间" title="选择结束时间" aria-expanded="false" aria-controls="compactTimePicker">◷</button><button id="sessionEndNow" type="button">现在</button></span></div></div>
+        <div class="editor-field editor-duration"><span>有效时长</span><output id="editActivityDuration" aria-live="polite">0 秒</output></div>
+        <div id="editorError" class="editor-error" role="alert"></div>
+      </div>
+      <div class="editor-buttons"><button id="cancelEditor" type="button">取消</button><button class="primary" id="saveActivity" type="submit">保存</button></div>
+      <div id="compactTimePicker" class="compact-time-picker" role="group" aria-labelledby="compactTimeTitle" hidden>
+        <strong id="compactTimeTitle">选择时间</strong>
+        <div class="compact-time-parts">
+          <label>年<input id="pickerYear" type="number" min="1" max="9999" disabled /></label>
+          <label>月<input id="pickerMonth" type="number" min="1" max="12" disabled /></label>
+          <label>日<input id="pickerDay" type="number" min="1" max="31" disabled /></label>
+          <label>时<input id="pickerHour" type="number" min="0" max="23" disabled /></label>
+          <label>分<input id="pickerMinute" type="number" min="0" max="59" disabled /></label>
+          <label>秒<input id="pickerSecond" type="number" min="0" max="59" disabled /></label>
+        </div>
+        <div id="compactTimeError" class="editor-error" role="alert"></div>
+        <div class="compact-time-buttons"><button id="cancelCompactTime" type="button">取消</button><button id="applyCompactTime" type="button" class="primary">确定</button></div>
+      </div>
+    </form>
+  </dialog>
+  <script src="activity-sessions.js"></script>
+  <script src="activity-time.js"></script>
+  <script src="ui-icons.js"></script>
+  <script src="appearance.js"></script>
   <script src="renderer.js"></script>
+  <script src="activity-ui.js"></script>
+  <script src="recycle-bin.js"></script>
 </body>
 </html>

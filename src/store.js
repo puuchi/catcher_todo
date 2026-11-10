@@ -2,6 +2,7 @@
 const fs = require('fs')
 const path = require('path')
 const { app } = require('electron')
+const { atomicSave } = require('./activity-store')
 
 class Store {
   constructor() {
@@ -23,8 +24,9 @@ class Store {
   }
 
   set(key, value) {
-    this.data[key] = value
-    fs.writeFileSync(this.path, JSON.stringify(this.data), 'utf8')
+    const next = { ...this.data, [key]: value }
+    atomicSave(this.path, next)
+    this.data = next
   }
 }
 

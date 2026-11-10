@@ -4,6 +4,7 @@ let pinned = true
 let isUrgent = false
 let editingId = null
 let showHistory = false
+let trashBusy = false
 
 const todoInput        = document.getElementById('todoInput')
 const todoList         = document.getElementById('todoList')
@@ -20,7 +21,7 @@ const deadlineInput    = document.getElementById('deadlineInput')
 const optDeadlineLabel = document.getElementById('optDeadlineLabel')
 
 function todayStr() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' })
+  return ActivityTime.localDate()
 }
 
 async function init() {
@@ -30,6 +31,10 @@ async function init() {
 }
 
 function render() {
+  historyBtn.style.display = ''
+  clearDoneBtn.style.display = ''
+  statusText.style.display = ''
+  btnBack.style.display = 'none'
   if (showHistory) { renderHistory(); return }
   const today = todayStr()
 
@@ -49,7 +54,7 @@ function render() {
   })
 
   if (visible.length === 0) {
-    todoList.innerHTML = `<div class="empty-hint">暂无任务<br>在上方输入，按 Enter 添加</div>`
+    todoList.innerHTML = `<div class="empty-hint">暂无待办</div>`
     statusText.textContent = ''
     return
   }
@@ -89,7 +94,8 @@ function render() {
             <span class="todo-text">${escapeHtml(t.text)}</span>${urgentBadge}${deadlineBadge}
           </div>
         </div>
-        <button class="todo-delete" title="删除">✕</button>
+        ${!t.done ? `<button class="todo-start" title="开始计时" aria-label="开始计时：${escapeHtml(t.text)}">▶</button>` : ''}
+        <button class="todo-delete" title="移入回收站" aria-label="移入回收站">✕</button>
       </li>`
   })
 
@@ -100,6 +106,10 @@ function render() {
     item.querySelector('input[type="checkbox"]').addEventListener('change', () => toggle(id))
     item.querySelector('.todo-delete').addEventListener('click', () => remove(id))
     if (!item.classList.contains('done')) {
+      item.querySelector('.todo-start').addEventListener('click', () => {
+        const todo = todos.find(todo => todo.id === id)
+        if (todo && !todo.done) window.dispatchEvent(new CustomEvent('start-todo-activity', { detail: { id: todo.id, name: todo.text } }))
+      })
       item.querySelector('.todo-text').addEventListener('click', () => startEdit(id))
     }
   })
@@ -151,11 +161,30 @@ function toggle(id) {
   render()
 }
 
-function remove(id) {
-  todos = todos.filter(t => t.id !== id)
-  save()
-  render()
+async function remove(id) {
+  const todo = todos.find(todo => todo.id === id)
+  if (!todo || trashBusy) return
+  trashBusy = true
+  try {
+    const result = await window.api.todoTrashAction('trash', id)
+    if (!result.ok) throw new Error(result.error)
+    todos = todos.filter(todo => todo.id !== id)
+    render()
+  } catch (error) {
+    statusText.textContent = error.message
+  } finally {
+    trashBusy = false
+  }
 }
+
+window.addEventListener('todos-changed', async () => {
+  try {
+    todos = await window.api.loadTodos()
+    render()
+  } catch (error) {
+    statusText.textContent = error.message
+  }
+})
 
 function startEdit(id) {
   if (editingId === id) return
@@ -332,7 +361,7 @@ function renderHistory() {
 }
 
 function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
 

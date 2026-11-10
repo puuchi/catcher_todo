@@ -44,6 +44,9 @@
       display: none;
       pointer-events: none;
     }
+    #activityDot { position: absolute; right: 1px; bottom: 2px; width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; border: 1px solid white; pointer-events: none; }
+    #activityDot.running { background: #34c759; }
+    #activityDot.paused { background: #ed9a26; }
   </style>
 </head>
 <body>
@@ -66,9 +69,25 @@
       <line x1="60" y1="68" x2="90" y2="66" stroke="#aaa" stroke-width="1.2" stroke-linecap="round"/>
       <line x1="60" y1="70" x2="90" y2="71" stroke="#aaa" stroke-width="1.2" stroke-linecap="round"/>
     </svg>
+    <span id="activityDot" aria-hidden="true"></span>
   </div>
 
+  <script src="activity-sessions.js"></script>
+  <script src="activity-time.js"></script>
   <script>
+    let activityState
+    function updateActivity(state) {
+      activityState = state
+      const current = state.activities.find(activity => activity.status === 'running')
+      const paused = state.activities.filter(activity => activity.status === 'paused')
+      document.getElementById('activityDot').className = current ? 'running' : paused.length ? 'paused' : ''
+      document.getElementById('bubble').title = current
+        ? `正在 · ${current.name} · ${Math.floor(ActivityTime.duration(current) / 60000)} 分钟`
+        : paused.length ? `已暂停 · ${paused.length} 个后台事项` : 'Floatodo · 双击展开'
+    }
+    window.api.onActivities(updateActivity)
+    window.api.getActivities().then(updateActivity).catch(() => {})
+    document.getElementById('bubble').addEventListener('mouseenter', () => { if (activityState) updateActivity(activityState) })
     let isDown = false, offsetX = 0, offsetY = 0
     let moved = false, lastUp = 0
 

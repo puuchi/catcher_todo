@@ -1,9 +1,13 @@
 # FloatTodo
 
+当前版本 1.8.3，支持多事项交错计时、单次进展、跨日期时间轴、统一回收站及差异化事项配色。运行、数据结构、测试结果及 Windows 人工验收步骤见 [活动追踪开发说明](ACTIVITY_TRACKING.md)。
+
+本仓库基于 [pearfish223/Floatodo](https://github.com/pearfish223/Floatodo) 增量开发，应用名称为 FloatTodo。
+
 A lightweight floating desktop todo app for macOS & Windows, built with Electron.
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.8.3-blue)
 
 ## Features
 
@@ -19,7 +23,9 @@ A lightweight floating desktop todo app for macOS & Windows, built with Electron
 
 ## Download
 
-Grab the latest installer from [Releases](https://github.com/pearfish223/Floatodo/releases):
+The upstream project's historical installers are available from [upstream Releases](https://github.com/pearfish223/Floatodo/releases).
+
+Build the current Windows version with `npm run build:win`. The output is `dist/win/FloatTodo Setup 1.8.3.exe`.
 
 | Platform | File |
 |---|---|
@@ -31,9 +37,9 @@ Grab the latest installer from [Releases](https://github.com/pearfish223/Floatod
 Requires [Node.js](https://nodejs.org) 18+.
 
 ```bash
-git clone https://github.com/pearfish223/Floatodo.git
-cd Floatodo
-npm install
+git clone https://github.com/puuchi/catcher_todo.git
+cd catcher_todo
+npm ci
 npm start
 ```
 
@@ -74,7 +80,7 @@ Output files will be in `dist/mac/` and `dist/win/`.
 一款轻量级桌面悬浮待办应用，支持 macOS 和 Windows，基于 Electron 构建。
 
 ![Platform](https://img.shields.io/badge/平台-macOS%20%7C%20Windows-lightgrey)
-![Version](https://img.shields.io/badge/版本-1.0.0-blue)
+![Version](https://img.shields.io/badge/版本-1.8.3-blue)
 
 ## 功能特点
 
@@ -90,7 +96,9 @@ Output files will be in `dist/mac/` and `dist/win/`.
 
 ## 下载安装
 
-从 [Releases](https://github.com/pearfish223/Floatodo/releases) 下载对应平台的安装包：
+原项目的历史安装包可从 [原项目 Releases](https://github.com/pearfish223/Floatodo/releases) 下载。
+
+当前 Windows 版本执行 `npm run build:win` 生成，输出为 `dist/win/FloatTodo Setup 1.8.3.exe`。
 
 | 平台 | 文件 |
 |---|---|
@@ -102,9 +110,9 @@ Output files will be in `dist/mac/` and `dist/win/`.
 需要 [Node.js](https://nodejs.org) 18 及以上版本。
 
 ```bash
-git clone https://github.com/pearfish223/Floatodo.git
-cd Floatodo
-npm install
+git clone https://github.com/puuchi/catcher_todo.git
+cd catcher_todo
+npm ci
 npm start
 ```
 

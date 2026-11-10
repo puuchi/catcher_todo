@@ -6,6 +6,7 @@
   },
   "files": [
     "src/**/*",
+    "assets/**/*",
     "package.json"
   ],
   "win": {

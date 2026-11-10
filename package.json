@@ -1,13 +1,15 @@
 {
   "name": "float-todo",
-  "version": "1.0.0",
+  "version": "1.8.3",
   "description": "A floating desktop todo list for Mac & Windows",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "build:mac": "electron-builder --mac --config build/mac.json",
     "build:win": "electron-builder --win --x64 --config build/win.json",
-    "build:all": "npm run build:mac && npm run build:win"
+    "build:all": "npm run build:mac && npm run build:win",
+    "test": "node --test test/activity.test.js test/timeline.test.js test/recycle.test.js",
+    "test:electron": "node test/electron-smoke.cjs && node test/timeline-ui.cjs && node test/recycle-ui.cjs"
   },
   "devDependencies": {
     "electron": "^28.0.0",
