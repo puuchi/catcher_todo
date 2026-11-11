@@ -18,7 +18,8 @@ if (!process.versions.electron) {
     }
   }
 } else {
-  const { app, BrowserWindow, session } = require('electron')
+  const { app, BrowserWindow, dialog, session } = require('electron')
+  dialog.showMessageBox = async () => ({response:1})
   const { ActivityStore } = require('../src/activity-store')
   const { localDate } = require('../src/activity-time')
   const scale = process.env.FLOATODO_TEST_SCALE
@@ -141,7 +142,8 @@ if (!process.versions.electron) {
     assert.equal(await evaluate("document.querySelectorAll('.detail-day').length"), 2)
     assert.equal(await evaluate("document.querySelectorAll('.detail-session').length"), 4)
     assert.equal(await evaluate("document.querySelector('.detail-origin').dataset.sessionId"), targetSession)
-    assert.equal(await evaluate("(()=>{const r=document.querySelector('.detail-origin').getBoundingClientRect(),b=document.getElementById('matterDetailBody').getBoundingClientRect();return r.top>=b.top&&r.bottom<=b.bottom})()"), true)
+    // Fractional display scaling can round the last scroll offset by less than one CSS pixel.
+    assert.equal(await evaluate("(()=>{const r=document.querySelector('.detail-origin').getBoundingClientRect(),b=document.getElementById('matterDetailBody').getBoundingClientRect();return r.top>=b.top-1&&r.bottom<=b.bottom+1})()"), true, await evaluate("JSON.stringify({origin:document.querySelector('.detail-origin').getBoundingClientRect().toJSON(),body:document.getElementById('matterDetailBody').getBoundingClientRect().toJSON(),scroll:document.getElementById('matterDetailBody').scrollTop})"))
     await capture('04-details')
     await evaluate(`document.querySelector('.detail-origin .session-edit').click()`)
     assert.equal(await evaluate("document.getElementById('editActivityName').readOnly"), true)

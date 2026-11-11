@@ -18,7 +18,8 @@ if (!process.versions.electron) {
     }
   }
 } else {
-  const {app,BrowserWindow,session} = require('electron')
+  const {app,BrowserWindow,dialog,session} = require('electron')
+  dialog.showMessageBox = async () => ({response:1})
   const {ActivityStore} = require('../src/activity-store')
   const {localDate} = require('../src/activity-time')
   const scale = process.env.FLOATODO_TEST_SCALE

@@ -83,35 +83,48 @@
       document.getElementById('activityDot').className = current ? 'running' : paused.length ? 'paused' : ''
       document.getElementById('bubble').title = current
         ? `正在 · ${current.name} · ${Math.floor(ActivityTime.duration(current) / 60000)} 分钟`
-        : paused.length ? `已暂停 · ${paused.length} 个后台事项` : 'Floatodo · 双击展开'
+        : paused.length ? `已暂停 · ${paused.length} 个后台事项` : 'FloatTodo · 单击展开，右键关闭'
     }
     window.api.onActivities(updateActivity)
-    window.api.getActivities().then(updateActivity).catch(() => {})
+    window.api.getActivities().then(updateActivity).catch(error => console.error('[bubble] Failed to load activities', error))
     document.getElementById('bubble').addEventListener('mouseenter', () => { if (activityState) updateActivity(activityState) })
-    let isDown = false, offsetX = 0, offsetY = 0
-    let moved = false, lastUp = 0
+    const bubble = document.getElementById('bubble')
+    let gesture = null
 
-    document.addEventListener('mousedown', e => {
-      isDown = true
-      moved = false
-      offsetX = e.clientX
-      offsetY = e.clientY
-    })
-
-    document.addEventListener('mousemove', e => {
-      if (!isDown) return
-      moved = true
-      window.api.moveWindow(e.screenX - offsetX, e.screenY - offsetY)
-    })
-
-    document.addEventListener('mouseup', () => {
-      isDown = false
-      if (!moved) {
-        const now = Date.now()
-        if (now - lastUp < 400) window.api.restoreMain()
-        lastUp = now
+    bubble.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || gesture) return
+      gesture = {
+        pointerId: event.pointerId,
+        startX: event.screenX,
+        startY: event.screenY,
+        offsetX: event.clientX,
+        offsetY: event.clientY,
+        moved: false
       }
-      moved = false
+      bubble.setPointerCapture(event.pointerId)
+    })
+
+    bubble.addEventListener('pointermove', event => {
+      if (!gesture || event.pointerId !== gesture.pointerId) return
+      // Ignore normal click jitter, but retain drag state even when returning to the start.
+      if (Math.hypot(event.screenX - gesture.startX, event.screenY - gesture.startY) >= 4) gesture.moved = true
+      if (gesture.moved) window.api.moveWindow(event.screenX - gesture.offsetX, event.screenY - gesture.offsetY)
+    })
+
+    bubble.addEventListener('pointerup', event => {
+      if (!gesture || event.pointerId !== gesture.pointerId) return
+      const shouldRestore = !gesture.moved
+      gesture = null
+      bubble.releasePointerCapture(event.pointerId)
+      if (shouldRestore) window.api.restoreMain()
+    })
+
+    bubble.addEventListener('pointercancel', () => { gesture = null })
+    bubble.addEventListener('lostpointercapture', () => { gesture = null })
+    document.addEventListener('contextmenu', event => {
+      event.preventDefault()
+      gesture = null
+      window.api.showContextMenu()
     })
   </script>
 </body>

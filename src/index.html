@@ -4,39 +4,54 @@
   <meta charset="UTF-8" />
   <title>FloatTodo</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="activity.css" />
 </head>
 <body>
 
   <div class="titlebar" id="titlebar">
     <div class="titlebar-left">
-      <span class="app-title">Floatodo</span>
+      <span class="brand-mark" aria-hidden="true"><span data-icon="check"></span></span>
+      <span class="app-title">FloatTodo</span>
     </div>
     <div class="titlebar-buttons">
-      <button class="btn-bubble" id="btnBubble" title="缩成悬浮球">●</button>
-      <button class="btn-pin active" id="btnPin" title="固定置顶">▲</button>
-      <button class="btn-min" id="btnMin" title="最小化">—</button>
-      <button class="btn-close" id="btnClose" title="隐藏">✕</button>
+      <button class="btn-pin active" id="btnPin" title="固定置顶" aria-label="固定置顶" aria-pressed="true"><span data-icon="pin"></span></button>
+      <button class="btn-min" id="btnMin" title="最小化" aria-label="最小化"><span data-icon="minus"></span></button>
+      <button class="btn-close" id="btnClose" title="缩成悬浮窗" aria-label="缩成悬浮窗"><span data-icon="close"></span></button>
     </div>
   </div>
 
   <nav class="module-tabs" aria-label="功能导航">
-    <button data-page="todos" class="selected" aria-selected="true">待办</button>
-    <button data-page="current" aria-selected="false">正在做 <span id="navActivityDot"></span></button>
-    <button data-page="timeline" aria-selected="false">时间轴</button>
+    <button data-page="todos" class="selected" aria-selected="true"><span data-icon="list"></span>待办</button>
+    <button data-page="current" aria-selected="false"><span data-icon="timer"></span>正在做 <span id="navActivityDot"></span></button>
+    <button data-page="timeline" aria-selected="false"><span data-icon="timeline"></span>时间轴</button>
   </nav>
   <div id="activityMessage" class="activity-message" role="status" hidden>
     <span id="activityMessageText"></span>
     <button id="dismissActivityMessage" type="button" aria-label="关闭提示" title="关闭提示" hidden>✕</button>
   </div>
   <section id="page-todos" class="module-page">
+  <div class="todo-toolbar">
+    <div class="todo-heading"><p class="page-eyebrow" id="todoEyebrow">A LITTLE MORE FOCUS</p><h1><b id="todoHeadingLabel">待办清单</b><span id="todoCount">0</span></h1></div>
+    <button id="newTodoBtn" type="button" aria-expanded="false" aria-controls="todoComposer"><span data-icon="plus"></span>新建待办</button>
+  </div>
+  <form id="todoComposer" hidden>
+  <div class="composer-heading"><strong>记下一件事</strong><span>NEW TASK</span></div>
   <div class="input-area">
-    <input type="text" id="todoInput" placeholder="添加新任务… (Enter)" maxlength="80" />
-    <button class="icon-btn" id="optUrgent" title="标记紧急">🚨</button>
+    <input type="text" id="todoInput" aria-label="待办内容" placeholder="输入待办内容…" maxlength="80" required autocomplete="off" />
+    <button class="icon-btn" id="optUrgent" type="button" title="标记紧急" aria-label="标记紧急"><span data-icon="flag"></span></button>
     <label class="icon-btn" id="optDeadlineLabel" title="设置截止日期">
-      📅
+      <span data-icon="calendar"></span>
       <input type="date" id="deadlineInput" />
     </label>
   </div>
+  <label class="todo-notes-field" for="todoNotes">备注 <span>可选</span></label>
+  <textarea id="todoNotes" placeholder="补充说明、步骤或链接…" maxlength="2000" rows="3"></textarea>
+  <div class="todo-composer-actions">
+    <span id="todoCreateError" role="alert" hidden></span>
+    <button id="cancelTodoBtn" type="button">取消</button>
+    <button id="createTodoBtn" type="submit">创建</button>
+  </div>
+  </form>
 
   <ul id="todoList"></ul>
 
@@ -113,8 +128,8 @@
     <div class="appearance-caption"><span>不透明</span><span id="appearanceStatus" role="status"></span><span>全透明</span></div>
   </section>
   <footer class="app-tools">
-    <div class="app-tools-left"><button id="btnAppearance" title="背景透明度" aria-label="背景透明度设置" aria-expanded="false" aria-controls="appearancePanel">外观</button><button id="todoTrashBtn" class="trash-tool" aria-label="打开回收站" title="回收站" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg></button></div>
-    <button id="quitApp">退出 Floatodo</button>
+    <div class="app-tools-left"><button id="btnAppearance" title="背景透明度" aria-label="背景透明度设置" aria-expanded="false" aria-controls="appearancePanel"><span data-icon="sliders"></span>外观</button><button id="todoTrashBtn" class="trash-tool" aria-label="打开回收站" title="回收站" aria-pressed="false"><span data-icon="trash"></span></button></div>
+    <button id="quitApp"><span data-icon="power"></span>退出</button>
   </footer>
   <div id="timelineMenu" class="timeline-menu" role="menu" aria-label="活动操作" hidden>
     <button id="timelineMenuEdit" role="menuitem" tabindex="-1">↗ 详情</button>

@@ -11,12 +11,17 @@ class Store {
   }
 
   _load() {
+    if (!fs.existsSync(this.path)) return {}
+    let data
     try {
-      if (fs.existsSync(this.path)) {
-        return JSON.parse(fs.readFileSync(this.path, 'utf8'))
-      }
-    } catch (e) {}
-    return {}
+      data = JSON.parse(fs.readFileSync(this.path, 'utf8'))
+    } catch (error) {
+      throw new Error(`无法读取配置文件，原文件将保留：${this.path}\n${error.message}`, { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error(`配置文件格式无效，已停止写入以保护原文件：${this.path}`)
+    }
+    return data
   }
 
   get(key) {

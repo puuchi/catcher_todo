@@ -8,7 +8,8 @@
   function preview(transparency) {
     slider.value = transparency
     value.textContent = `${transparency}%`
-    document.documentElement.style.setProperty('--bg', `rgba(255, 255, 255, ${1 - transparency / 100})`)
+    document.documentElement.style.setProperty('--bg', `rgba(249, 248, 241, ${1 - transparency / 100})`)
+    document.documentElement.style.setProperty('--wash-opacity', String((1 - transparency / 100) * 0.24))
   }
 
   function hidePanel() {
