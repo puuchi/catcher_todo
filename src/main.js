@@ -1,7 +1,8 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, powerMonitor } = require('electron')
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, powerMonitor, screen, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { ActivityStore, atomicSave } = require('./activity-store')
+const { clampBounds } = require('./window-position')
 
 let mainWindow
 let bubbleWindow
@@ -9,7 +10,91 @@ let tray
 let activityStore
 let checkpointTimer
 let windowStore
+let isQuitting = false
+let quitPending = false
+let positionSaveTimer
+const pendingPositions = new Map()
 const completedRequests = new Map()
+
+function reportFailure(context, error) {
+  console.error(`[${context}]`, error)
+  dialog.showErrorBox('FloatTodo 保存失败', `${context}\n${error.message}\n请检查磁盘空间、文件权限和配置文件。应用将保留当前状态。`)
+}
+
+function queuePosition(key, window) {
+  if (!window || window.isDestroyed() || !windowStore) return
+  pendingPositions.set(key, window.getBounds())
+  clearTimeout(positionSaveTimer)
+  positionSaveTimer = setTimeout(() => {
+    try { flushPositions() } catch (error) { reportFailure('保存窗口位置失败', error) }
+  }, 300)
+}
+
+function flushPositions() {
+  clearTimeout(positionSaveTimer)
+  for (const [key, bounds] of pendingPositions) {
+    windowStore.set(key, bounds)
+    pendingPositions.delete(key)
+  }
+}
+
+function fitWindow(window, key) {
+  if (!window || window.isDestroyed()) return
+  applyWindowBounds(window, window.getBounds())
+  queuePosition(key, window)
+}
+
+function applyWindowBounds(window, bounds) {
+  const fitted = clampBounds(bounds, screen.getAllDisplays())
+  if (window === mainWindow) window.setMinimumSize(Math.min(260, fitted.width), Math.min(300, fitted.height))
+  window.setBounds(fitted)
+}
+
+function handleDisplayChange() {
+  console.info('[display-change] Rechecking window positions', screen.getAllDisplays().map(display => ({ id: display.id, workArea: display.workArea })))
+  fitWindow(mainWindow, 'windowBounds')
+  fitWindow(bubbleWindow, 'bubbleBounds')
+}
+
+async function finishQuit() {
+  // Let the cancelled before-quit event unwind before attempting another quit.
+  await Promise.resolve()
+  try {
+    const running = activityStore?.current()
+    if (running?.status === 'running') {
+      const owner = bubbleWindow?.isVisible() ? bubbleWindow : mainWindow
+      const options = {
+        type: 'question',
+        title: '退出 FloatTodo',
+        message: `“${running.name}”正在计时，是否暂停并退出？`,
+        detail: '暂停后会保存本次已记录的时间，下次打开可继续计时。',
+        buttons: ['取消', '暂停并退出'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true
+      }
+      const result = owner ? await dialog.showMessageBox(owner, options) : await dialog.showMessageBox(options)
+      if (result.response !== 1) {
+        console.info('[quit] Cancelled by user')
+        return
+      }
+    }
+    activityStore?.pause('quit')
+    activityStore?.checkpoint()
+    if (activityStore) publishActivities()
+    queuePosition('windowBounds', mainWindow)
+    queuePosition('bubbleBounds', bubbleWindow)
+    flushPositions()
+    isQuitting = true
+    console.info('[quit] Activity and window positions saved; exiting')
+    clearInterval(checkpointTimer)
+    app.quit()
+  } catch (error) {
+    reportFailure('退出前保存失败，应用尚未退出', error)
+  } finally {
+    quitPending = false
+  }
+}
 
 function publishActivities() {
   const snapshot = activityStore.snapshot()
@@ -23,6 +108,7 @@ function pauseActivities(reason) {
   try {
     activityStore?.pause(reason)
   } catch (error) {
+    console.error('[activity-pause] Failed to persist interruption', { reason, error })
     // Fail closed even if the disk is unavailable during a system interruption.
     const current = activityStore.current()
     if (current?.status === 'running') {
@@ -80,22 +166,23 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'))
 
-  // 记住窗口位置
-  const Store = require('./store')
-  const store = new Store()
-  windowStore = store
-  const bounds = store.get('windowBounds')
+  const bounds = windowStore.get('windowBounds')
   if (bounds) {
-    mainWindow.setBounds(bounds)
+    applyWindowBounds(mainWindow, bounds)
   }
 
   mainWindow.on('moved', () => {
-    store.set('windowBounds', mainWindow.getBounds())
+    queuePosition('windowBounds', mainWindow)
   })
   mainWindow.on('resized', () => {
-    store.set('windowBounds', mainWindow.getBounds())
+    queuePosition('windowBounds', mainWindow)
   })
 
+  mainWindow.on('close', event => {
+    if (isQuitting) return
+    event.preventDefault()
+    minimizeToBubble()
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -126,11 +213,7 @@ if (!hasInstanceLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow) return
-    if (bubbleWindow) bubbleWindow.close()
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
+    restoreFromBubble()
   })
 
 app.whenReady().then(() => {
@@ -138,7 +221,16 @@ app.whenReady().then(() => {
     app.dock.show()
   }
   activityStore = new ActivityStore(path.join(app.getPath('userData'), 'activity-log.json'))
+  const Store = require('./store')
+  windowStore = new Store()
+  for (const key of ['windowBounds', 'bubbleBounds']) {
+    const saved = windowStore.get(key)
+    if (saved !== undefined) clampBounds(saved, screen.getAllDisplays())
+  }
   createWindow()
+  screen.on('display-added', handleDisplayChange)
+  screen.on('display-removed', handleDisplayChange)
+  screen.on('display-metrics-changed', handleDisplayChange)
   powerMonitor.on('lock-screen', () => pauseActivities('lock'))
   powerMonitor.on('suspend', () => pauseActivities('sleep'))
   powerMonitor.on('shutdown', () => pauseActivities('shutdown'))
@@ -153,6 +245,10 @@ app.whenReady().then(() => {
     }
   }, 30000)
   // createTray() // 需要图标资源时可开启
+}).catch(error => {
+  console.error('[startup] Unable to initialize application', error)
+  dialog.showErrorBox('FloatTodo 启动失败', `无法读取配置或创建窗口，原文件未被覆盖。\n${error.message}`)
+  app.exit(1)
 })
 
 app.on('window-all-closed', () => {
@@ -163,9 +259,12 @@ app.on('activate', () => {
   if (!mainWindow) createWindow()
 })
 
-app.on('before-quit', () => {
-  clearInterval(checkpointTimer)
-  pauseActivities('quit')
+app.on('before-quit', event => {
+  if (isQuitting) return
+  event.preventDefault()
+  if (quitPending) return
+  quitPending = true
+  void finishQuit()
 })
 
 }
@@ -213,7 +312,7 @@ ipcMain.handle('save-archive', (_, archive) => {
 
 // IPC 通信：窗口控制
 ipcMain.on('window-minimize', () => mainWindow && mainWindow.minimize())
-ipcMain.on('window-close', () => mainWindow && mainWindow.hide())
+ipcMain.on('window-close', minimizeToBubble)
 ipcMain.on('window-pin', (_, pinned) => mainWindow && mainWindow.setAlwaysOnTop(pinned))
 
 ipcMain.handle('appearance-get', event => {
@@ -272,15 +371,20 @@ ipcMain.on('app-quit', event => {
 })
 
 // IPC 通信：悬浮球
-ipcMain.on('minimize-to-bubble', () => {
+function minimizeToBubble() {
   if (!mainWindow) return
   if (bubbleWindow) { mainWindow.hide(); bubbleWindow.show(); return }
   const bounds = mainWindow.getBounds()
+  const saved = windowStore.get('bubbleBounds')
+  const bubbleBounds = clampBounds(saved ? { ...saved, width: 36, height: 36 } : {
+    width: 36, height: 36,
+    x: bounds.x + bounds.width / 2 - 18, y: bounds.y
+  }, screen.getAllDisplays())
   bubbleWindow = new BrowserWindow({
     width: 36,
     height: 36,
-    x: Math.round(bounds.x + bounds.width / 2 - 18),
-    y: bounds.y,
+    x: bubbleBounds.x,
+    y: bubbleBounds.y,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -295,15 +399,51 @@ ipcMain.on('minimize-to-bubble', () => {
     }
   })
   bubbleWindow.loadFile(path.join(__dirname, 'bubble.html'))
+  bubbleWindow.on('moved', () => queuePosition('bubbleBounds', bubbleWindow))
+  bubbleWindow.on('close', event => {
+    if (isQuitting) return
+    try {
+      queuePosition('bubbleBounds', bubbleWindow)
+      flushPositions()
+    } catch (error) {
+      event.preventDefault()
+      reportFailure('保存悬浮窗位置失败', error)
+    }
+  })
   bubbleWindow.on('closed', () => { bubbleWindow = null })
   mainWindow.hide()
+}
+
+function restoreFromBubble() {
+  if (!mainWindow) return
+  fitWindow(mainWindow, 'windowBounds')
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  if (bubbleWindow) bubbleWindow.close()
+}
+
+ipcMain.on('minimize-to-bubble', minimizeToBubble)
+
+ipcMain.on('bubble-move', (event, x, y) => {
+  if (event.sender !== bubbleWindow?.webContents) return
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    console.error('[bubble-move] Invalid window coordinates', { x, y })
+    return
+  }
+  const bounds = clampBounds({ ...bubbleWindow.getBounds(), x, y }, screen.getAllDisplays())
+  bubbleWindow.setPosition(bounds.x, bounds.y)
 })
 
-ipcMain.on('bubble-move', (_, x, y) => {
-  if (bubbleWindow) bubbleWindow.setPosition(Math.round(x), Math.round(y))
+ipcMain.on('restore-from-bubble', event => {
+  if (event.sender === bubbleWindow?.webContents) restoreFromBubble()
 })
 
-ipcMain.on('restore-from-bubble', () => {
-  if (mainWindow) { mainWindow.show(); mainWindow.focus() }
-  if (bubbleWindow) { bubbleWindow.close() }
+ipcMain.on('bubble-context-menu', event => {
+  if (event.sender !== bubbleWindow?.webContents) return
+  Menu.buildFromTemplate([
+    { label: '打开', click: restoreFromBubble },
+    { type: 'separator' },
+    { label: '关闭', click: () => app.quit() }
+  ]).popup({ window: bubbleWindow })
 })

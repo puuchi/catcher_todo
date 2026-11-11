@@ -4,7 +4,9 @@ let pinned = true
 let isUrgent = false
 let editingId = null
 let showHistory = false
-let trashBusy = false
+let todoMutationBusy = false
+let editingNotesId = null
+const expandedNotes = new Set()
 
 const todoInput        = document.getElementById('todoInput')
 const todoList         = document.getElementById('todoList')
@@ -15,7 +17,13 @@ const btnBack          = document.getElementById('btnBack')
 const btnPin           = document.getElementById('btnPin')
 const btnMin           = document.getElementById('btnMin')
 const btnClose         = document.getElementById('btnClose')
-const btnBubble        = document.getElementById('btnBubble')
+const newTodoBtn       = document.getElementById('newTodoBtn')
+const todoComposer     = document.getElementById('todoComposer')
+const cancelTodoBtn    = document.getElementById('cancelTodoBtn')
+const createTodoBtn    = document.getElementById('createTodoBtn')
+const todoCreateError  = document.getElementById('todoCreateError')
+const todoNotes        = document.getElementById('todoNotes')
+const todoToolbar      = document.querySelector('.todo-toolbar')
 const optUrgent        = document.getElementById('optUrgent')
 const deadlineInput    = document.getElementById('deadlineInput')
 const optDeadlineLabel = document.getElementById('optDeadlineLabel')
@@ -31,6 +39,12 @@ async function init() {
 }
 
 function render() {
+  // Rendering replaces the editors, so their state must follow the DOM lifecycle.
+  editingId = null
+  editingNotesId = null
+  document.getElementById('todoHeadingLabel').textContent = '待办清单'
+  document.getElementById('todoEyebrow').textContent = 'A LITTLE MORE FOCUS'
+  document.getElementById('todoCount').textContent = todos.filter(todo => !todo.done).length
   historyBtn.style.display = ''
   clearDoneBtn.style.display = ''
   statusText.style.display = ''
@@ -54,7 +68,7 @@ function render() {
   })
 
   if (visible.length === 0) {
-    todoList.innerHTML = `<div class="empty-hint">暂无待办</div>`
+    todoList.innerHTML = `<div class="empty-hint todo-empty"><div class="empty-illustration" aria-hidden="true"><svg viewBox="0 0 64 70" fill="none"><path d="M18 12h28l4 4v43H14V16z" fill="#fffef7" stroke="#bbc7aa" stroke-width="1.3"/><rect x="24" y="8" width="16" height="8" rx="3" fill="#d6dfc5" stroke="#a5b592"/><path d="m23 32 5 5 12-13" stroke="#6c8a5c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M23 46h18M23 51h12" stroke="#d1d9c5" stroke-width="1.5" stroke-linecap="round"/></svg></div><strong>暂无待办，留点空白</strong><p>把想做的事记下来，慢慢完成。</p></div>`
     statusText.textContent = ''
     return
   }
@@ -91,15 +105,17 @@ function render() {
         <input type="checkbox" ${t.done ? 'checked' : ''} />
         <div class="todo-content">
           <div class="todo-main">
-            <span class="todo-text">${escapeHtml(t.text)}</span>${urgentBadge}${deadlineBadge}
+            <span class="todo-text">${escapeHtml(t.text)}</span>${urgentBadge}${deadlineBadge}${notesToggle(t)}
           </div>
+          ${notesPanel(t)}
         </div>
-        ${!t.done ? `<button class="todo-start" title="开始计时" aria-label="开始计时：${escapeHtml(t.text)}">▶</button>` : ''}
-        <button class="todo-delete" title="移入回收站" aria-label="移入回收站">✕</button>
+        ${!t.done ? `<button class="todo-start" title="开始计时" aria-label="开始计时：${escapeHtml(t.text)}">${FloatodoIcons.markup('play')}</button>` : ''}
+        <button class="todo-delete" title="移入回收站" aria-label="移入回收站">${FloatodoIcons.markup('close')}</button>
       </li>`
   })
 
   todoList.innerHTML = html
+  bindNotesEvents()
 
   todoList.querySelectorAll('.todo-item').forEach(item => {
     const id = item.dataset.id
@@ -132,26 +148,147 @@ function formatDate(dateStr, today) {
   return `${dateLabel} · ${diff}天后`
 }
 
-function addTodo(text) {
+function setTodoMutationBusy(busy) {
+  todoMutationBusy = busy
+  todoList.inert = busy
+  clearDoneBtn.disabled = busy
+  newTodoBtn.disabled = busy
+  createTodoBtn.disabled = busy
+  cancelTodoBtn.disabled = busy
+  todoComposer.inert = busy
+  todoComposer.setAttribute('aria-busy', String(busy))
+}
+
+function closeTodoComposer() {
+  todoComposer.hidden = true
+  todoToolbar.hidden = false
+  newTodoBtn.setAttribute('aria-expanded', 'false')
+  todoComposer.reset()
+  isUrgent = false
+  optUrgent.classList.remove('active')
+  optDeadlineLabel.classList.remove('active')
+  todoCreateError.hidden = true
+  todoCreateError.textContent = ''
+  newTodoBtn.focus()
+}
+
+async function addTodo(text) {
   text = text.trim()
-  if (!text) return
-  todos.unshift({
-    id: Date.now().toString(),
+  if (!text || todoComposer.hidden || todoMutationBusy) return
+  setTodoMutationBusy(true)
+  createTodoBtn.textContent = '正在创建…'
+  todoCreateError.hidden = true
+  const todo = {
+    id: crypto.randomUUID(),
     text,
     done: false,
     urgent: isUrgent,
     deadline: deadlineInput.value || null,
+    notes: todoNotes.value.trim(),
     completedAt: null
+  }
+  try {
+    const updatedTodos = [todo, ...todos]
+    await window.api.saveTodos(updatedTodos)
+    todos = updatedTodos
+    closeTodoComposer()
+    render()
+  } catch (error) {
+    console.error('[todo-create] Failed to save todo', { id: todo.id, error })
+    todoCreateError.textContent = `创建失败：${error.message}`
+    todoCreateError.hidden = false
+  } finally {
+    setTodoMutationBusy(false)
+    createTodoBtn.textContent = '创建'
+    if (todoComposer.hidden) newTodoBtn.focus()
+  }
+}
+
+function notesToggle(todo) {
+  return `<button class="todo-notes-toggle${todo.notes ? ' has-notes' : ''}" type="button" aria-label="${todo.notes ? '查看' : '添加'}备注：${escapeHtml(todo.text)}" aria-expanded="${expandedNotes.has(todo.id)}">备注${todo.notes ? ' ·' : ''}</button>`
+}
+
+function notesPanel(todo, editable = true) {
+  const notes = typeof todo.notes === 'string' ? todo.notes : ''
+  return `<div class="todo-notes-panel" ${expandedNotes.has(todo.id) ? '' : 'hidden'}>
+    <p class="todo-notes${notes ? '' : ' is-empty'}">${notes ? escapeHtml(notes) : '暂无备注'}</p>
+    ${editable ? '<button class="todo-notes-edit" type="button">编辑备注</button>' : ''}
+  </div>`
+}
+
+function bindNotesEvents(editable = true) {
+  todoList.querySelectorAll('.todo-item').forEach(item => {
+    const id = item.dataset.id
+    const toggle = item.querySelector('.todo-notes-toggle')
+    toggle.addEventListener('click', () => {
+      const panel = item.querySelector('.todo-notes-panel')
+      panel.hidden = !panel.hidden
+      toggle.setAttribute('aria-expanded', String(!panel.hidden))
+      if (panel.hidden) expandedNotes.delete(id)
+      else expandedNotes.add(id)
+    })
+    if (editable) item.querySelector('.todo-notes-edit').addEventListener('click', () => editNotes(id))
   })
-  isUrgent = false
-  optUrgent.classList.remove('active')
-  deadlineInput.value = ''
-  optDeadlineLabel.classList.remove('active')
-  save()
-  render()
+}
+
+function editNotes(id) {
+  if (todoMutationBusy) return
+  const todo = todos.find(item => item.id === id)
+  if (!todo) throw new Error(`待办不存在：${id}`)
+  if (editingId || editingNotesId) {
+    editingId = null
+    editingNotesId = null
+    render()
+  }
+  editingNotesId = id
+  expandedNotes.add(id)
+  const item = [...todoList.querySelectorAll('.todo-item')].find(item => item.dataset.id === id)
+  const panel = item.querySelector('.todo-notes-panel')
+  panel.hidden = false
+  item.querySelector('.todo-notes-toggle').setAttribute('aria-expanded', 'true')
+  panel.innerHTML = `<textarea class="edit-notes" aria-label="待办备注" maxlength="2000" rows="3"></textarea>
+    <div class="todo-notes-actions"><button class="cancel-notes" type="button">取消</button><button class="save-notes" type="button">保存备注</button></div>
+    <p class="todo-notes-error" role="alert" hidden></p>`
+  const input = panel.querySelector('.edit-notes')
+  input.value = typeof todo.notes === 'string' ? todo.notes : ''
+  const cancel = () => { editingNotesId = null; render() }
+  panel.querySelector('.cancel-notes').addEventListener('click', cancel)
+  panel.querySelector('.save-notes').addEventListener('click', () => saveNotes(id, input.value, panel))
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); cancel() }
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault()
+      saveNotes(id, input.value, panel)
+    }
+  })
+  input.focus()
+}
+
+async function saveNotes(id, notes, panel) {
+  if (todoMutationBusy) return
+  const errorMessage = panel.querySelector('.todo-notes-error')
+  const button = panel.querySelector('.save-notes')
+  errorMessage.hidden = true
+  setTodoMutationBusy(true)
+  button.textContent = '正在保存…'
+  try {
+    const updated = todos.map(todo => todo.id === id ? { ...todo, notes: notes.trim() } : todo)
+    await window.api.saveTodos(updated)
+    todos = updated
+    editingNotesId = null
+    render()
+  } catch (error) {
+    console.error('[todo-notes] Failed to save notes', { id, error })
+    errorMessage.textContent = `保存失败：${error.message}`
+    errorMessage.hidden = false
+  } finally {
+    setTodoMutationBusy(false)
+    button.textContent = '保存备注'
+  }
 }
 
 function toggle(id) {
+  if (todoMutationBusy) return
   const t = todos.find(t => t.id === id)
   if (t) {
     t.done = !t.done
@@ -163,8 +300,8 @@ function toggle(id) {
 
 async function remove(id) {
   const todo = todos.find(todo => todo.id === id)
-  if (!todo || trashBusy) return
-  trashBusy = true
+  if (!todo || todoMutationBusy) return
+  setTodoMutationBusy(true)
   try {
     const result = await window.api.todoTrashAction('trash', id)
     if (!result.ok) throw new Error(result.error)
@@ -173,7 +310,7 @@ async function remove(id) {
   } catch (error) {
     statusText.textContent = error.message
   } finally {
-    trashBusy = false
+    setTodoMutationBusy(false)
   }
 }
 
@@ -204,8 +341,8 @@ function startEdit(id) {
   li.querySelector('.todo-content').innerHTML = `
     <div class="edit-row">
       <input class="edit-input" type="text" value="${escapeHtml(t.text)}" maxlength="80" />
-      <button class="edit-urgent icon-btn-sm${t.urgent ? ' active' : ''}" title="紧急">🚨</button>
-      <label class="edit-deadline icon-btn-sm${t.deadline ? ' active' : ''}" title="截止日期">📅
+      <button class="edit-urgent icon-btn-sm${t.urgent ? ' active' : ''}" title="紧急" aria-label="紧急">${FloatodoIcons.markup('flag')}</button>
+      <label class="edit-deadline icon-btn-sm${t.deadline ? ' active' : ''}" title="截止日期">${FloatodoIcons.markup('calendar')}
         <input type="date" class="edit-deadline-input" value="${t.deadline || ''}" />
       </label>
     </div>`
@@ -239,6 +376,7 @@ function startEdit(id) {
 }
 
 function saveEdit(id, text, urgent, deadline) {
+  if (todoMutationBusy) return
   text = text.trim()
   if (!text) return
   const t = todos.find(t => t.id === id)
@@ -257,10 +395,25 @@ function save() {
 }
 
 // ── 事件绑定 ─────────────────────────────────
-todoInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') {
-    addTodo(todoInput.value)
-    todoInput.value = ''
+newTodoBtn.addEventListener('click', () => {
+  showHistory = false
+  render()
+  todoComposer.hidden = false
+  todoToolbar.hidden = true
+  newTodoBtn.setAttribute('aria-expanded', 'true')
+  todoInput.focus()
+})
+
+todoComposer.addEventListener('submit', e => {
+  e.preventDefault()
+  addTodo(todoInput.value)
+})
+
+cancelTodoBtn.addEventListener('click', closeTodoComposer)
+todoComposer.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !todoMutationBusy) {
+    e.preventDefault()
+    closeTodoComposer()
   }
 })
 
@@ -275,15 +428,16 @@ deadlineInput.addEventListener('change', () => {
 
 btnMin.addEventListener('click', () => window.api.minimize())
 btnClose.addEventListener('click', () => window.api.close())
-btnBubble.addEventListener('click', () => window.api.minimizeToBubble())
 btnPin.addEventListener('click', () => {
   pinned = !pinned
   btnPin.classList.toggle('active', pinned)
-  btnPin.textContent = pinned ? '▲' : '△'
+  btnPin.setAttribute('aria-pressed', String(pinned))
+  btnPin.title = pinned ? '取消置顶' : '固定置顶'
   window.api.setPin(pinned)
 })
 
 clearDoneBtn.addEventListener('click', () => {
+  if (todoMutationBusy) return
   const done = todos.filter(t => t.done)
   if (done.length === 0) return
   const existingIds = new Set(archive.map(t => t.id))
@@ -305,12 +459,15 @@ btnBack.addEventListener('click', () => {
 })
 
 function renderHistory() {
+  document.getElementById('todoHeadingLabel').textContent = '完成记录'
+  document.getElementById('todoEyebrow').textContent = 'LITTLE WINS, EVERY DAY'
   // 合并 todos 中 done 任务 + archive，按 id 去重
   const seen = new Set()
   const all = []
   ;[...todos.filter(t => t.done), ...archive].forEach(t => {
     if (!seen.has(t.id)) { seen.add(t.id); all.push(t) }
   })
+  document.getElementById('todoCount').textContent = all.length
 
   // footer
   historyBtn.style.display = 'none'
@@ -345,12 +502,13 @@ function renderHistory() {
         dateLabel = `${parseInt(cm)}月${parseInt(cd)}日`
       }
       html += `
-        <li class="todo-item done">
+        <li class="todo-item done" data-id="${t.id}">
           <input type="checkbox" checked disabled />
           <div class="todo-content">
             <div class="todo-main">
-              <span class="todo-text">${escapeHtml(t.text)}</span>${urgentBadge}
+              <span class="todo-text">${escapeHtml(t.text)}</span>${urgentBadge}${notesToggle(t)}
             </div>
+            ${notesPanel(t, false)}
           </div>
           <span class="history-date">${dateLabel}</span>
         </li>`
@@ -358,6 +516,7 @@ function renderHistory() {
   })
 
   todoList.innerHTML = html
+  bindNotesEvents(false)
 }
 
 function escapeHtml(str) {

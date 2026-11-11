@@ -21,6 +21,14 @@ A lightweight floating desktop todo app for macOS & Windows, built with Electron
 - **Persistent position** — window position and size are remembered across restarts
 - **Glassmorphism UI** — frosted glass look that blends with your desktop
 
+## Interface
+
+The desktop interface uses a warm ivory and forest green palette, bundled Manrope / Fraunces fonts, consistent line icons, and compact layouts for small floating windows. Fonts are included locally with their SIL Open Font License files, so rendering does not require an internet connection.
+
+Design references: [Things](https://culturedcode.com/things/) for task hierarchy and whitespace, and [Todoist](https://www.todoist.com/zh-CN) for clear task lists and secondary metadata. The palette and FloatTodo layouts are designed for this app.
+
+`src/style.css` owns shared tokens, window controls, navigation, todos and appearance controls. `src/activity.css` owns activity, timeline, editor and recycle surfaces. Run `node test/design-qa.cjs` to capture isolated visual checks at 270×360, 320×480 and 400×600; screenshots are written to the temporary `floattodo-design-qa` directory.
+
 ## Download
 
 The upstream project's historical installers are available from [upstream Releases](https://github.com/pearfish223/Floatodo/releases).
@@ -62,13 +70,17 @@ Output files will be in `dist/mac/` and `dist/win/`.
 
 | Action | How |
 |---|---|
-| Add task | Type in the input box, press **Enter** |
+| Add task | Click **新建待办**, enter the task, then click **创建** or press **Enter**; **取消** / **Esc** discards the draft |
+| Task notes | Add optional notes when creating a task; click **备注** to expand and **编辑备注** to update; **Ctrl+Enter** saves notes |
 | Mark urgent | Click 🚨 before adding |
 | Set deadline | Click 📅 to pick a date |
 | Complete task | Click the circle on the left |
 | Edit task | Click the task text to edit inline |
 | Delete task | Hover and click **✕** |
-| Minimize to bubble | Click **●** in the top bar |
+| Minimize to bubble | Click **✕** in the top bar or close the main window |
+| Open / move bubble | Single-click to open; hold and drag to move without opening |
+| Bubble position | Remembers its position across restarts and stays inside the available screen area when displays change |
+| Quit from bubble | Right-click the bubble and choose **关闭**; an active timer asks whether to pause, save and exit |
 | Pin on top | Click **▲** in the top bar |
 | Clear completed | Click **清除完成** at the bottom |
 | View history | Click **历史** at the bottom |
@@ -135,13 +147,17 @@ npm run build:all
 
 | 操作 | 方法 |
 |---|---|
-| 添加任务 | 在输入框输入内容，按 **Enter** |
+| 添加任务 | 点击 **新建待办** 展开输入区，填写后点击 **创建** 或按 **Enter**；**取消** / **Esc** 放弃草稿 |
+| 待办备注 | 新建时可填写备注；点击 **备注** 展开、**编辑备注** 修改，**Ctrl+Enter** 保存；历史记录保留备注供查看 |
 | 标记紧急 | 添加前点击 🚨 按钮 |
 | 设置截止日期 | 点击 📅 按钮选择日期 |
 | 完成任务 | 点击左侧圆圈 |
 | 编辑任务 | 点击任务文字，行内编辑 |
 | 删除任务 | 鼠标悬停后点击 **✕** |
-| 缩成悬浮球 | 点击顶栏 **●** 按钮 |
+| 缩成悬浮窗 | 点击顶栏 **✕** 按钮，或关闭主窗口 |
+| 展开 / 移动悬浮窗 | 单击展开；按住拖动可移动，松手不会展开 |
+| 悬浮窗位置 | 重启后记住位置；调整屏幕分辨率或移除显示器后，窗口会回到可见区域 |
+| 从悬浮窗退出 | 右键悬浮窗选择 **关闭**；正在计时时需确认 **暂停并退出**，保存失败会提示并保留应用 |
 | 置顶窗口 | 点击顶栏 **▲** 按钮 |
 | 清除已完成 | 点击底部 **清除完成** |
 | 查看历史 | 点击底部 **历史** |

@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('activity-changed', listener)
   },
   moveWindow:  (x, y) => ipcRenderer.send('bubble-move', x, y),
-  restoreMain: ()     => ipcRenderer.send('restore-from-bubble')
+  restoreMain: ()     => ipcRenderer.send('restore-from-bubble'),
+  showContextMenu: () => ipcRenderer.send('bubble-context-menu')
 })

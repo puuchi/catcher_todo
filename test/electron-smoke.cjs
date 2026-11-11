@@ -23,7 +23,7 @@ if (!process.versions.electron) {
     fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
   }
 } else {
-  const { app, BrowserWindow, powerMonitor, session } = require('electron')
+  const { app, BrowserWindow, Menu, dialog, ipcMain, powerMonitor, session } = require('electron')
   app.setPath('userData', process.env.FLOATODO_TEST_DATA)
   app.setName('FloatodoActivityTest')
   require(path.join(process.env.FLOATODO_APP_ROOT || path.join(__dirname, '..'), 'src/main'))
@@ -78,7 +78,7 @@ if (!process.versions.electron) {
       assert.equal(await evaluate('window.api.getTransparency()'), 45)
       await evaluate("document.getElementById('btnAppearance').click(); document.getElementById('backgroundTransparency').value='72'; document.getElementById('backgroundTransparency').dispatchEvent(new Event('input')); document.getElementById('backgroundTransparency').dispatchEvent(new Event('change'))")
       await until(async () => await evaluate('window.api.getTransparency()') === 72)
-      assert.equal(await evaluate("getComputedStyle(document.body).backgroundColor"), 'rgba(255, 255, 255, 0.28)')
+      assert.equal(await evaluate("getComputedStyle(document.body).backgroundColor"), 'rgba(249, 248, 241, 0.28)')
       assert.equal((await evaluate('window.api.saveTransparency(101)')).ok, false)
       await evaluate("document.getElementById('btnAppearance').click()")
       await evaluate("document.querySelector('#todoList .todo-delete').click()")
@@ -98,7 +98,8 @@ if (!process.versions.electron) {
       assert.equal((await evaluate('window.api.loadTodoTrash()')).length, 0)
       await evaluate("document.getElementById('trashBack').click()")
       assert.equal((await evaluate("window.api.todoTrashAction('delete','original')")).ok, false)
-      await evaluate("document.getElementById('todoInput').value='临时删除测试';document.getElementById('todoInput').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))")
+      await evaluate("document.getElementById('newTodoBtn').click();document.getElementById('todoInput').value='临时删除测试'")
+      await pressKey('Return')
       await until(async () => (await evaluate('window.api.loadTodos()')).length === 2)
       await evaluate("[...document.querySelectorAll('#todoList .todo-item')].find(item=>item.querySelector('.todo-text').textContent==='临时删除测试').querySelector('.todo-delete').click()")
       await until(async () => (await evaluate('window.api.loadTodoTrash()')).length === 1)
@@ -185,7 +186,9 @@ if (!process.versions.electron) {
       await evaluate("document.getElementById('pauseActivity').click()")
       await until(async () => active(await state()).status === 'paused')
       await command('resume')
-      await evaluate('window.api.minimizeToBubble()')
+      assert.equal(await evaluate("document.querySelectorAll('.titlebar-buttons button').length"), 3)
+      assert.equal(await evaluate("document.getElementById('btnBubble')"), null)
+      await evaluate("document.getElementById('btnClose').click()")
       const bubble = await until(() => BrowserWindow.getAllWindows().find(item => item.id !== window.id))
       await until(() => !bubble.webContents.isLoading())
       await until(() => bubble.webContents.executeJavaScript("document.getElementById('activityDot').className === 'running'"))
@@ -197,11 +200,37 @@ if (!process.versions.electron) {
       const beforeMove = bubble.getBounds()
       await bubble.webContents.executeJavaScript(`window.api.moveWindow(${beforeMove.x+10},${beforeMove.y+10})`)
       await until(() => Math.abs(bubble.getBounds().x - beforeMove.x - 10) <= 2)
+      bubble.focus()
+      // Electron's injected mouse events omit screen coordinates; provide them for the drag input.
+      await bubble.webContents.executeJavaScript("for(const type of ['pointerdown','pointermove','pointerup'])document.addEventListener(type,e=>Object.defineProperties(e,{screenX:{value:100+e.clientX},screenY:{value:100+e.clientY}}),true)")
+      bubble.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,x:18,y:18})
+      await delay(450)
+      bubble.webContents.sendInputEvent({type:'mouseMove',modifiers:['leftButtonDown'],x:28,y:24})
+      await delay(50)
+      bubble.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,x:28,y:24})
+      await delay(100)
+      assert.equal(bubble.isDestroyed(), false, 'A held drag must keep the bubble open')
+      assert.equal(window.isVisible(), false, 'Releasing a drag must not restore the main window')
       assert.equal(active(await state()).status, 'running')
       await command('pause')
       await until(() => bubble.webContents.executeJavaScript("document.getElementById('activityDot').className === 'paused'"))
       assert.equal(await bubble.webContents.executeJavaScript("document.getElementById('bubble').title.includes('2 个后台事项')"),true)
-      await bubble.webContents.executeJavaScript('window.api.restoreMain()')
+      const savedBubbleBounds = bubble.getBounds()
+      bubble.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,x:18,y:18})
+      bubble.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,x:18,y:18})
+      await until(() => window.isVisible())
+      await until(() => bubble.isDestroyed())
+      const configAfterBubble = JSON.parse(fs.readFileSync(path.join(process.env.FLOATODO_TEST_DATA,'config.json'),'utf8'))
+      assert.equal(configAfterBubble.bubbleBounds.x,savedBubbleBounds.x)
+      assert.equal(configAfterBubble.bubbleBounds.y,savedBubbleBounds.y)
+      window.close()
+      const nativeCloseBubble = await until(() => BrowserWindow.getAllWindows().find(item => item.id !== window.id))
+      await until(() => !nativeCloseBubble.webContents.isLoading())
+      assert.equal(nativeCloseBubble.getBounds().x,savedBubbleBounds.x)
+      assert.equal(nativeCloseBubble.getBounds().y,savedBubbleBounds.y)
+      assert.equal(window.isDestroyed(), false, 'Native close must preserve the app')
+      assert.equal(window.isVisible(), false)
+      await nativeCloseBubble.webContents.executeJavaScript('window.api.restoreMain()')
       await until(() => window.isVisible())
       await command('resume')
       powerMonitor.emit('lock-screen')
@@ -341,9 +370,93 @@ if (!process.versions.electron) {
       await command('resume')
       await evaluate("document.querySelector('[data-page=todos]').click(); document.getElementById('historyBtn').click(); document.getElementById('btnBack').click()")
       assert.ok(await evaluate("document.getElementById('todoList').innerText.includes('原有待办')"))
-      await evaluate("document.getElementById('optUrgent').click(); document.getElementById('deadlineInput').value='2026-11-10'; document.getElementById('todoInput').value='新增待办'; document.getElementById('todoInput').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))")
+      assert.equal(await evaluate("document.getElementById('todoComposer').hidden"), true)
+      await evaluate("document.getElementById('newTodoBtn').click()")
+      assert.equal(await evaluate("document.getElementById('todoComposer').hidden"), false)
+      assert.equal(await evaluate("document.activeElement.id"), 'todoInput')
+      await capture('todo-composer')
+      assert.equal((await evaluate('window.api.loadTodos()')).length, 1)
+      await evaluate("document.getElementById('todoInput').value='取消的草稿';document.getElementById('optUrgent').click();document.getElementById('deadlineInput').value='2026-11-10';document.getElementById('cancelTodoBtn').click()")
+      assert.equal(await evaluate("document.getElementById('todoComposer').hidden"), true)
+      assert.equal((await evaluate('window.api.loadTodos()')).length, 1)
+      await evaluate("document.getElementById('newTodoBtn').click()")
+      assert.deepEqual(await evaluate("[document.getElementById('todoInput').value,document.getElementById('deadlineInput').value,document.getElementById('optUrgent').classList.contains('active')]"), ['', '', false])
+      await evaluate("document.getElementById('todoComposer').requestSubmit()")
+      assert.equal((await evaluate('window.api.loadTodos()')).length, 1)
+      assert.equal(await evaluate("document.getElementById('todoComposer').hidden"), false)
+      await evaluate("document.getElementById('cancelTodoBtn').click();document.querySelector('#todoList .todo-text').click()")
+      assert.ok(await evaluate("Boolean(document.querySelector('#todoList .edit-input'))"))
+      await evaluate("document.getElementById('newTodoBtn').click();document.getElementById('cancelTodoBtn').click();document.querySelector('#todoList .todo-text').click()")
+      assert.ok(await evaluate("Boolean(document.querySelector('#todoList .edit-input'))"), 'Cancelling a new draft must not leave stale title editor state')
+      await evaluate("document.querySelector('#todoList .edit-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));document.getElementById('newTodoBtn').click()")
+      const originalSaveHandler = ipcMain._invokeHandlers.get('save-todos')
+      const originalTrashHandler = ipcMain._invokeHandlers.get('todo-trash-action')
+      assert.equal(typeof originalSaveHandler, 'function')
+      assert.equal(typeof originalTrashHandler, 'function')
+      const beforeCreateFailure = await evaluate('window.api.loadTodos()')
+      let saveCalls = 0
+      let releaseSave
+      let releaseTrash
+      let rejectSave = true
+      const saveGate = new Promise(resolve => { releaseSave = resolve })
+      ipcMain.removeHandler('save-todos')
+      ipcMain.handle('save-todos', async (event, records) => {
+        saveCalls++
+        await saveGate
+        if (rejectSave) throw new Error('Injected todo save failure')
+        return originalSaveHandler(event, records)
+      })
+      try {
+        await evaluate("document.getElementById('todoInput').value='保存失败后重试';document.getElementById('createTodoBtn').click()")
+        await until(() => saveCalls === 1)
+        assert.deepEqual(await evaluate("[document.getElementById('todoList').inert,...['clearDone','newTodoBtn','createTodoBtn','cancelTodoBtn'].map(id=>document.getElementById(id).disabled)]"), [true,true,true,true,true])
+        await evaluate("document.getElementById('todoComposer').requestSubmit();document.querySelector('#todoList .todo-delete').click();document.querySelector('#todoList input[type=checkbox]').click();document.getElementById('clearDone').click()")
+        await delay(50)
+        assert.equal(saveCalls, 1, 'Pending create must block duplicate creation and other todo writes')
+        assert.deepEqual(await evaluate('window.api.loadTodos()'), beforeCreateFailure)
+        assert.equal((await evaluate('window.api.loadTodoTrash()')).length, 0)
+        releaseSave()
+        await until(() => evaluate("!document.getElementById('todoCreateError').hidden && !document.getElementById('createTodoBtn').disabled"))
+        assert.equal(await evaluate("document.getElementById('todoCreateError').textContent.includes('Injected todo save failure')"), true)
+        assert.equal(await evaluate("document.getElementById('todoInput').value"), '保存失败后重试')
+        assert.equal(await evaluate("document.getElementById('todoComposer').hidden"), false)
+        assert.deepEqual(await evaluate('window.api.loadTodos()'), beforeCreateFailure)
+        rejectSave = false
+        await evaluate("document.getElementById('createTodoBtn').click()")
+        await until(() => evaluate("document.getElementById('todoComposer').hidden"))
+        const retryTodo = (await evaluate('window.api.loadTodos()')).find(todo => todo.text === '保存失败后重试')
+        assert.ok(retryTodo)
+        assert.equal(saveCalls, 2, 'Retry must perform exactly one new save')
+        const trashGate = new Promise(resolve => { releaseTrash = resolve })
+        ipcMain.removeHandler('todo-trash-action')
+        ipcMain.handle('todo-trash-action', async (event, action) => {
+          await trashGate
+          return originalTrashHandler(event, action)
+        })
+        await evaluate(`document.getElementById('newTodoBtn').click();document.getElementById('todoInput').value='删除期间不能创建';document.querySelector('#todoList [data-id="${retryTodo.id}"] .todo-delete').click()`)
+        await until(() => evaluate("document.getElementById('todoList').inert"))
+        await evaluate("document.getElementById('todoComposer').requestSubmit();document.getElementById('clearDone').click()")
+        await delay(50)
+        assert.equal(saveCalls, 2, 'Pending deletion must block creation with a stale todo snapshot')
+        assert.equal((await evaluate('window.api.loadTodos()')).length, 2)
+        releaseTrash()
+        await until(() => evaluate("!document.getElementById('todoList').inert"))
+        assert.deepEqual(await evaluate('window.api.loadTodos()'), beforeCreateFailure)
+        assert.equal((await evaluate(`window.api.todoTrashAction('delete',${JSON.stringify(retryTodo.id)})`)).ok, true)
+        await evaluate("document.getElementById('cancelTodoBtn').click();document.getElementById('newTodoBtn').click()")
+      } finally {
+        releaseSave()
+        if (releaseTrash) releaseTrash()
+        ipcMain.removeHandler('save-todos')
+        ipcMain.handle('save-todos', originalSaveHandler)
+        ipcMain.removeHandler('todo-trash-action')
+        ipcMain.handle('todo-trash-action', originalTrashHandler)
+      }
+      console.log('PASS todo creation: delayed saves serialize mutations, visible failure preserves draft and data, retry succeeds')
+      await evaluate("document.getElementById('optUrgent').click(); document.getElementById('deadlineInput').value='2026-11-10'; document.getElementById('todoInput').value='新增待办'; document.getElementById('createTodoBtn').click()")
       await until(async () => (await evaluate('window.api.loadTodos()')).length === 2)
       assert.equal((await evaluate('window.api.loadTodos()'))[0].urgent, true)
+      await until(() => evaluate("document.getElementById('todoComposer').hidden"))
       await evaluate("document.querySelector('#todoList .todo-item .todo-text').click(); document.querySelector('.edit-input').value='修改后的待办'; document.querySelector('.edit-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))")
       await until(async () => (await evaluate('window.api.loadTodos()'))[0].text === '修改后的待办')
       await evaluate("document.querySelector('#todoList .todo-item input[type=checkbox]').click(); document.getElementById('clearDone').click(); document.getElementById('historyBtn').click()")
@@ -382,12 +495,59 @@ if (!process.versions.electron) {
       assert.equal(active(await state()).status, 'running')
       console.log('PASS crash recovery: paused at saved checkpoint')
       console.log('PASS recovery notice: dismissible without changing records, stays dismissed after resume, save and tab changes')
+      let quitPrompts = 0
+      dialog.showMessageBox = async (owner, options) => {
+        quitPrompts++
+        assert.equal(options.defaultId,0)
+        assert.equal(options.cancelId,0)
+        assert.deepEqual(options.buttons,['取消','暂停并退出'])
+        return {response:0}
+      }
+      app.quit()
+      await until(()=>quitPrompts===1)
+      await delay(50)
+      assert.equal(window.isDestroyed(),false)
+      assert.equal(active(await state()).status,'running')
+      dialog.showMessageBox = async () => ({response:1})
+      const {ActivityStore} = require('../src/activity-store')
+      const originalPause = ActivityStore.prototype.pause
+      const originalShowError = dialog.showErrorBox
+      let quitSaveError
+      ActivityStore.prototype.pause = function () { throw new Error('Injected quit persistence failure') }
+      dialog.showErrorBox = (title,content) => { quitSaveError = {title,content} }
+      try {
+        app.quit()
+        await until(()=>quitSaveError)
+        assert.equal(quitSaveError.content.includes('Injected quit persistence failure'),true)
+        assert.equal(window.isDestroyed(),false,'Save failure must keep the app alive')
+        assert.equal(active(await state()).status,'running')
+      } finally {
+        ActivityStore.prototype.pause = originalPause
+        dialog.showErrorBox = originalShowError
+      }
+      app.once('will-quit',()=>console.log('PASS quit confirmation: cancel preserves running activity, confirm pauses and exits'))
       app.quit()
     } else {
       assert.equal(active(await state()).status, 'paused')
       assert.equal(active(await state()).pauseReason, 'quit')
       console.log('PASS clean restart: previous activity remains paused')
-      app.quit()
+      await evaluate("document.getElementById('btnClose').click()")
+      const exitBubble = await until(() => BrowserWindow.getAllWindows().find(item => item.id !== window.id))
+      await until(() => !exitBubble.webContents.isLoading())
+      let contextMenu
+      const originalPopup = Menu.prototype.popup
+      Menu.prototype.popup = function () { contextMenu = this }
+      try {
+        await exitBubble.webContents.executeJavaScript("document.getElementById('bubble').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2}))")
+        await until(() => contextMenu)
+        assert.equal(window.isVisible(), false, 'Right click must keep the main window hidden')
+        const closeItem = contextMenu.items.find(item => item.label === '关闭')
+        assert.ok(closeItem, 'Bubble context menu must expose an explicit close action')
+        app.once('will-quit', () => console.log('PASS bubble context menu: explicit close quits the application'))
+        closeItem.click()
+      } finally {
+        Menu.prototype.popup = originalPopup
+      }
     }
   }).catch(error => { console.error(error.stack); process.exit(1) })
 }
